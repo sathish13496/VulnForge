@@ -18,7 +18,7 @@ An offensive security framework that scans remote Linux servers for misconfigura
 
 ```bash
 git clone https://github.com/sathish13496/VulnForge.git
-cd vulnforge
+cd VulnForge
 chmod +x install.sh
 ./install.sh
 
