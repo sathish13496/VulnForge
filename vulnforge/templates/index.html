@@ -1530,7 +1530,7 @@
                     <div class="nav-item" id="nav-findings" onclick="showView('findings')">
                         <span class="nav-icon">⚠️</span>
                         <span>Findings</span>
-                        <span class="nav-badge">24</span>
+                        <span class="nav-badge" id="findings-badge" style="display:none">0</span>
                     </div>
                     <div class="nav-item" id="nav-reports" onclick="showView('reports')">
                         <span class="nav-icon">📋</span>
@@ -1687,7 +1687,7 @@
 
                     <!-- Sensitive Files -->
                     <label class="module-card selected" onclick="toggleModule(this)">
-                        <input type="checkbox" class="module-checkbox" name="module" value="files" checked>
+                        <input type="checkbox" class="module-checkbox" name="module" value="sensitive_files" checked>
                         <div class="module-icon icon-files">📄</div>
                         <div class="module-info">
                             <h3>Sensitive File Exposure</h3>
@@ -1796,22 +1796,22 @@
             <section class="scan-control animate-in">
                 <div class="scan-info">
                     <div class="scan-stat">
-                        <div class="scan-stat-value">11</div>
+                        <div class="scan-stat-value" id="stat-modules">11</div>
                         <div class="scan-stat-label">Modules Active</div>
                     </div>
                     <div class="scan-stat-divider"></div>
                     <div class="scan-stat">
-                        <div class="scan-stat-value" style="color: var(--accent-tertiary);">03:42</div>
+                        <div class="scan-stat-value" id="stat-elapsed" style="color: var(--accent-tertiary);">--:--</div>
                         <div class="scan-stat-label">Elapsed Time</div>
                     </div>
                     <div class="scan-stat-divider"></div>
                     <div class="scan-stat">
-                        <div class="scan-stat-value" style="color: var(--accent-secondary);">45%</div>
+                        <div class="scan-stat-value" id="stat-progress" style="color: var(--accent-secondary);">0%</div>
                         <div class="scan-stat-label">Progress</div>
                     </div>
                     <div class="scan-stat-divider"></div>
                     <div class="scan-stat">
-                        <div class="scan-stat-value" style="color: var(--severity-critical);">24</div>
+                        <div class="scan-stat-value" id="stat-findings" style="color: var(--severity-critical);">0</div>
                         <div class="scan-stat-label">Issues Found</div>
                     </div>
                 </div>
@@ -1832,23 +1832,23 @@
 
                 <div class="stats-grid">
                     <div class="stat-card card-critical">
-                        <div class="stat-card-value">5</div>
+                        <div class="stat-card-value" id="count-critical">0</div>
                         <div class="stat-card-label">Critical</div>
                     </div>
                     <div class="stat-card card-high">
-                        <div class="stat-card-value">8</div>
+                        <div class="stat-card-value" id="count-high">0</div>
                         <div class="stat-card-label">High</div>
                     </div>
                     <div class="stat-card card-medium">
-                        <div class="stat-card-value">6</div>
+                        <div class="stat-card-value" id="count-medium">0</div>
                         <div class="stat-card-label">Medium</div>
                     </div>
                     <div class="stat-card card-low">
-                        <div class="stat-card-value">3</div>
+                        <div class="stat-card-value" id="count-low">0</div>
                         <div class="stat-card-label">Low</div>
                     </div>
                     <div class="stat-card card-info">
-                        <div class="stat-card-value">2</div>
+                        <div class="stat-card-value" id="count-info">0</div>
                         <div class="stat-card-label">Info</div>
                     </div>
                 </div>
@@ -1881,7 +1881,7 @@
                             <th>Status</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="findings-tbody">
                         <tr>
                             <td><button class="expand-btn">▶</button></td>
                             <td><span class="finding-severity-badge badge-critical"><span class="dot"></span>Critical</span></td>
@@ -2103,147 +2103,376 @@
     <!-- ============================================
          JAVASCRIPT
          ============================================ -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        // Navigation
+        // ============================================
+        // VulnForge — Live Scan Engine Frontend
+        // ============================================
+
+        let socket = null;
+        let scanRunning = false;
+        let currentScanType = 'full';
+        let statusInterval = null;
+
+        // ── WebSocket ──
+        function initSocket() {
+            try {
+                socket = io();
+                socket.on('connect', () => addLog('info', 'Connected to VulnForge scan engine'));
+                socket.on('disconnect', () => addLog('warn', 'Disconnected from scan engine'));
+                socket.on('scan_log', (d) => addLog(d.level, d.message, d.time));
+                socket.on('scan_status', (d) => updateStatus(d));
+            } catch (e) {
+                console.warn('WebSocket unavailable, using HTTP polling');
+            }
+        }
+
+        // ── Navigation ──
         function showView(view) {
-            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            const navItem = document.getElementById('nav-' + view);
-            if (navItem) navItem.classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            const el = document.getElementById('nav-' + view);
+            if (el) el.classList.add('active');
         }
 
-        // Scan type toggle
+        // ── Scan Type ──
         function setScanType(el, type) {
-            document.querySelectorAll('.scan-type-option').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.scan-type-option').forEach(b => b.classList.remove('active'));
             el.classList.add('active');
+            currentScanType = type;
         }
 
-        // Module toggle
+        // ── Module Toggle ──
         function toggleModule(card) {
-            const checkbox = card.querySelector('.module-checkbox');
-            // Let the checkbox toggle naturally, then sync the card style
+            const cb = card.querySelector('.module-checkbox');
             setTimeout(() => {
-                if (checkbox.checked) {
-                    card.classList.add('selected');
-                } else {
-                    card.classList.remove('selected');
-                }
+                card.classList.toggle('selected', cb.checked);
                 updateModuleCount();
             }, 10);
         }
 
-        // Toggle all modules
         function toggleAllModules() {
-            const checkboxes = document.querySelectorAll('.module-checkbox');
-            const allChecked = [...checkboxes].every(cb => cb.checked);
-            
-            checkboxes.forEach(cb => {
-                cb.checked = !allChecked;
-                const card = cb.closest('.module-card');
-                if (!allChecked) {
-                    card.classList.add('selected');
-                } else {
-                    card.classList.remove('selected');
-                }
+            const cbs = document.querySelectorAll('.module-checkbox');
+            const all = [...cbs].every(c => c.checked);
+            cbs.forEach(c => {
+                c.checked = !all;
+                c.closest('.module-card').classList.toggle('selected', !all);
             });
             updateModuleCount();
         }
 
-        // Update module count display
         function updateModuleCount() {
-            const count = document.querySelectorAll('.module-checkbox:checked').length;
-            const statValue = document.querySelector('.scan-stat-value');
-            if (statValue) statValue.textContent = count;
+            const n = document.querySelectorAll('.module-checkbox:checked').length;
+            const el = document.getElementById('stat-modules');
+            if (el) el.textContent = n;
         }
 
-        // Start scan
-        function startScan() {
-            const ip = document.getElementById('target-ip').value;
+        // ── Start Scan ──
+        async function startScan() {
+            const ip = document.getElementById('target-ip').value.trim();
             if (!ip) {
-                document.getElementById('target-ip').style.borderColor = 'var(--severity-critical)';
-                document.getElementById('target-ip').placeholder = '⚠️ Please enter a target IP address';
+                const inp = document.getElementById('target-ip');
+                inp.style.borderColor = 'var(--severity-critical)';
+                inp.placeholder = '⚠️ Please enter a target IP address';
                 setTimeout(() => {
-                    document.getElementById('target-ip').style.borderColor = '';
-                    document.getElementById('target-ip').placeholder = 'Enter target IP address (e.g., 192.168.1.100)';
+                    inp.style.borderColor = '';
+                    inp.placeholder = 'Enter target IP address (e.g., 192.168.1.100)';
                 }, 2000);
                 return;
             }
-            
-            const selectedModules = [...document.querySelectorAll('.module-checkbox:checked')].map(cb => cb.value);
-            if (selectedModules.length === 0) {
-                alert('Please select at least one scan module.');
-                return;
+
+            const mods = [...document.querySelectorAll('.module-checkbox:checked')].map(c => c.value);
+            if (!mods.length) { alert('Please select at least one scan module.'); return; }
+
+            const ports = document.getElementById('target-port').value.trim() || '1-65535';
+
+            // Reset UI
+            clearTerminal();
+            resetPipeline();
+            resetStats();
+            document.getElementById('findings-tbody').innerHTML =
+                '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">⏳ Scan in progress...</td></tr>';
+            document.getElementById('scan-overlay').classList.add('active');
+            scanRunning = true;
+
+            try {
+                const res = await fetch('/api/scan/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_ip: ip,
+                        scan_type: currentScanType,
+                        port_range: ports,
+                        modules: mods
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    addLog('error', data.error || 'Failed to start scan');
+                    document.getElementById('scan-overlay').classList.remove('active');
+                    scanRunning = false;
+                    return;
+                }
+                addLog('success', 'Scan launched — target: ' + ip + ' (' + currentScanType + ' mode)');
+                pollStatus();
+            } catch (e) {
+                addLog('error', 'Connection error: ' + e.message);
+                document.getElementById('scan-overlay').classList.remove('active');
+                scanRunning = false;
+            }
+        }
+
+        // ── Status Polling (backup for WebSocket) ──
+        function pollStatus() {
+            if (statusInterval) clearInterval(statusInterval);
+            statusInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/scan/status');
+                    const data = await res.json();
+                    updateStatus(data);
+                    if (['completed', 'error', 'stopped'].includes(data.status)) {
+                        clearInterval(statusInterval);
+                        statusInterval = null;
+                        scanRunning = false;
+                        document.getElementById('scan-overlay').classList.remove('active');
+                        fetchFindings();
+                    }
+                } catch (e) { /* ignore polling errors */ }
+            }, 2000);
+        }
+
+        // ── Update Status ──
+        function updateStatus(d) {
+            const pct = Math.round(d.progress || 0);
+
+            // Progress overlay
+            document.getElementById('progress-percent').textContent = pct + '%';
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-phase').textContent = d.phase || 'Initializing...';
+            document.getElementById('progress-detail').textContent = d.phase_description || '';
+
+            // Scan control bar
+            document.getElementById('stat-modules').textContent = d.modules_active || 0;
+            document.getElementById('stat-elapsed').textContent = d.elapsed_time || '--:--';
+            document.getElementById('stat-progress').textContent = pct + '%';
+            document.getElementById('stat-findings').textContent = d.findings_count || 0;
+
+            // Nav badge
+            const badge = document.getElementById('findings-badge');
+            if (badge) {
+                badge.textContent = d.findings_count || 0;
+                badge.style.display = (d.findings_count > 0) ? '' : 'none';
             }
 
-            document.getElementById('scan-overlay').classList.add('active');
-            simulateProgress();
+            // Severity counts
+            if (d.severity_counts) {
+                document.getElementById('count-critical').textContent = d.severity_counts.critical || 0;
+                document.getElementById('count-high').textContent = d.severity_counts.high || 0;
+                document.getElementById('count-medium').textContent = d.severity_counts.medium || 0;
+                document.getElementById('count-low').textContent = d.severity_counts.low || 0;
+                document.getElementById('count-info').textContent = d.severity_counts.info || 0;
+            }
+
+            // Pipeline phases
+            updatePipeline(d.phase_index || 0, d.status);
+
+            // Handle completion
+            if (d.status === 'completed') {
+                scanRunning = false;
+                document.getElementById('scan-overlay').classList.remove('active');
+                if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+                fetchFindings();
+            }
         }
 
-        // Simulate scan progress
-        function simulateProgress() {
-            const phases = [
-                { name: 'Phase 1: Reconnaissance', detail: 'Discovering host and OS fingerprint...' },
-                { name: 'Phase 2: Enumeration', detail: 'Scanning ports and identifying services...' },
-                { name: 'Phase 3: Vulnerability Discovery', detail: 'Analyzing configurations for weaknesses...' },
-                { name: 'Phase 4: Exploitation', detail: 'Validating exploitable vulnerabilities...' },
-                { name: 'Phase 5: Post-Exploitation', detail: 'Assessing impact and lateral movement...' },
-                { name: 'Phase 6: Reporting', detail: 'Generating comprehensive security report...' },
-            ];
-
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += Math.random() * 3;
-                if (progress >= 100) {
-                    progress = 100;
-                    clearInterval(interval);
-                    setTimeout(() => {
-                        document.getElementById('scan-overlay').classList.remove('active');
-                    }, 1000);
+        // ── Pipeline ──
+        function updatePipeline(idx, status) {
+            document.querySelectorAll('.pipeline-step').forEach((s, i) => {
+                const c = s.querySelector('.step-circle');
+                s.className = 'pipeline-step';
+                c.className = 'step-circle';
+                if (status === 'completed') {
+                    s.classList.add('completed'); c.classList.add('completed');
+                } else if (i < idx) {
+                    s.classList.add('completed'); c.classList.add('completed');
+                } else if (i === idx && (status === 'running' || status === 'paused')) {
+                    s.classList.add('active'); c.classList.add('active');
+                } else {
+                    c.classList.add('pending');
                 }
-
-                const phaseIndex = Math.min(Math.floor(progress / 17), 5);
-                document.getElementById('progress-percent').textContent = Math.round(progress) + '%';
-                document.getElementById('progress-bar').style.width = progress + '%';
-                document.getElementById('progress-phase').textContent = phases[phaseIndex].name;
-                document.getElementById('progress-detail').textContent = phases[phaseIndex].detail;
-            }, 200);
+            });
+            document.querySelectorAll('.step-connector').forEach((cn, i) => {
+                cn.className = 'step-connector';
+                if (status === 'completed' || i < idx) cn.classList.add('completed');
+                else if (i === idx && (status === 'running' || status === 'paused')) cn.classList.add('active');
+            });
         }
 
-        // Close scan overlay
+        function resetPipeline() {
+            document.querySelectorAll('.pipeline-step').forEach(s => {
+                s.className = 'pipeline-step';
+                s.querySelector('.step-circle').className = 'step-circle pending';
+            });
+            document.querySelectorAll('.step-connector').forEach(c => c.className = 'step-connector');
+        }
+
+        // ── Findings ──
+        async function fetchFindings() {
+            try {
+                const res = await fetch('/api/findings');
+                const data = await res.json();
+                renderFindings(data.findings || []);
+                if (data.severity_counts) {
+                    document.getElementById('count-critical').textContent = data.severity_counts.critical || 0;
+                    document.getElementById('count-high').textContent = data.severity_counts.high || 0;
+                    document.getElementById('count-medium').textContent = data.severity_counts.medium || 0;
+                    document.getElementById('count-low').textContent = data.severity_counts.low || 0;
+                    document.getElementById('count-info').textContent = data.severity_counts.info || 0;
+                    const total = (data.severity_counts.critical||0) + (data.severity_counts.high||0) +
+                                  (data.severity_counts.medium||0) + (data.severity_counts.low||0) + (data.severity_counts.info||0);
+                    document.getElementById('stat-findings').textContent = total;
+                    const badge = document.getElementById('findings-badge');
+                    if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
+                }
+            } catch (e) { addLog('warn', 'Could not fetch findings'); }
+        }
+
+        function renderFindings(findings) {
+            const tbody = document.getElementById('findings-tbody');
+            if (!findings.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">' +
+                    '<div style="font-size:36px;margin-bottom:8px;">🔍</div>No findings discovered. Run a scan to begin.</td></tr>';
+                return;
+            }
+            findings.sort((a, b) => (b.cvss_score || 0) - (a.cvss_score || 0));
+            tbody.innerHTML = findings.map(f => {
+                const sev = f.severity || 'info';
+                const icon = (sev === 'critical' || sev === 'high') ? '🔴 Open'
+                           : sev === 'medium' ? '🟡 Review' : '🟢 Noted';
+                return '<tr>' +
+                    '<td><button class="expand-btn" onclick="toggleDetail(this)">▶</button></td>' +
+                    '<td><span class="finding-severity-badge badge-' + sev + '"><span class="dot"></span>' + cap(sev) + '</span></td>' +
+                    '<td>' + esc(f.title || '') + '</td>' +
+                    '<td><span class="finding-module-tag">' + esc(f.module || '') + '</span></td>' +
+                    '<td><span class="cve-tag">' + (f.cve_id || '—') + '</span></td>' +
+                    '<td><span class="cvss-score cvss-' + sev + '">' + (f.cvss_score != null ? f.cvss_score : '—') + '</span></td>' +
+                    '<td>' + icon + '</td></tr>' +
+                    '<tr class="finding-detail-row" style="display:none"><td colspan="7">' +
+                    '<div style="padding:16px;background:var(--bg-input);border-radius:8px;margin:4px 0;">' +
+                    '<p style="margin-bottom:8px;color:var(--text-primary);"><strong>Description:</strong> ' + esc(f.description || '') + '</p>' +
+                    (f.evidence ? '<p style="margin-bottom:8px;color:var(--text-secondary);"><strong>Evidence:</strong> <code>' + esc(f.evidence) + '</code></p>' : '') +
+                    (f.remediation ? '<p style="color:var(--accent-tertiary);"><strong>Remediation:</strong> ' + esc(f.remediation) + '</p>' : '') +
+                    '</div></td></tr>';
+            }).join('');
+        }
+
+        function toggleDetail(btn) {
+            const r = btn.closest('tr').nextElementSibling;
+            if (r && r.classList.contains('finding-detail-row')) {
+                const v = r.style.display !== 'none';
+                r.style.display = v ? 'none' : 'table-row';
+                btn.textContent = v ? '▶' : '▼';
+            }
+        }
+
+        function resetStats() {
+            ['count-critical','count-high','count-medium','count-low','count-info'].forEach(
+                id => document.getElementById(id).textContent = '0'
+            );
+            document.getElementById('stat-findings').textContent = '0';
+            document.getElementById('stat-elapsed').textContent = '--:--';
+            document.getElementById('stat-progress').textContent = '0%';
+        }
+
+        // ── Terminal ──
+        function addLog(level, msg, time) {
+            const t = document.getElementById('terminal-body');
+            const ts = time || new Date().toLocaleTimeString('en-US', { hour12: false });
+            const lbl = level === 'success' ? 'OK' : level.toUpperCase();
+            const el = document.createElement('div');
+            el.className = 'log-line';
+            el.innerHTML = '<span class="log-time">' + esc(ts) + '</span>' +
+                '<span class="log-level ' + level + '">' + lbl + '</span>' +
+                '<span class="log-message">' + esc(msg) + '</span>';
+            t.appendChild(el);
+            t.scrollTop = t.scrollHeight;
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminal-body').innerHTML = '';
+            addLog('info', 'Terminal cleared — ready for new scan');
+        }
+
+        // ── Pause / Stop ──
+        async function pauseScan() {
+            if (!scanRunning) return;
+            try {
+                await fetch('/api/scan/pause', { method: 'POST' });
+                addLog('warn', 'Scan paused by user');
+            } catch (e) { addLog('error', 'Failed to pause scan'); }
+        }
+
+        async function stopScan() {
+            if (!scanRunning) return;
+            if (!confirm('Stop the running scan?')) return;
+            try {
+                await fetch('/api/scan/stop', { method: 'POST' });
+                scanRunning = false;
+                document.getElementById('scan-overlay').classList.remove('active');
+                if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+                addLog('warn', 'Scan stopped by user');
+                fetchFindings();
+            } catch (e) { addLog('error', 'Failed to stop scan'); }
+        }
+
+        // ── Reports ──
+        function downloadReport(format) {
+            if (format === 'pdf') {
+                alert('PDF generation is not yet implemented. Use HTML or JSON format.');
+                return;
+            }
+            addLog('info', 'Generating ' + format.toUpperCase() + ' report...');
+            window.open('/api/report/' + format, '_blank');
+        }
+
         function closeScanOverlay() {
             document.getElementById('scan-overlay').classList.remove('active');
         }
 
-        // Pause/Stop scan
-        function pauseScan() {
-            alert('Scan paused. Click Resume to continue.');
-        }
-
-        function stopScan() {
-            if (confirm('Are you sure you want to stop the scan?')) {
-                alert('Scan stopped.');
-            }
-        }
-
-        // Download report
-        function downloadReport(format) {
-            alert(`Generating ${format.toUpperCase()} report... Download will begin shortly.`);
-        }
-
-        // Filter chips
+        // ── Filter Chips ──
         document.querySelectorAll('.filter-chip').forEach(chip => {
-            chip.addEventListener('click', () => {
+            chip.addEventListener('click', async () => {
                 document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
                 chip.classList.add('active');
+                const sev = chip.textContent.trim().toLowerCase();
+                try {
+                    const url = sev === 'all' ? '/api/findings' : '/api/findings?severity=' + sev;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    renderFindings(data.findings || []);
+                } catch (e) { /* no scan data yet */ }
             });
         });
 
-        // Terminal auto-scroll animation
-        const terminal = document.getElementById('terminal-body');
-        if (terminal) {
-            terminal.scrollTop = terminal.scrollHeight;
-        }
+        // ── Helpers ──
+        function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-        // Add subtle entrance animations
+        // ── Initialize ──
+        document.addEventListener('DOMContentLoaded', () => {
+            initSocket();
+            updateModuleCount();
+            resetPipeline();
+            // Replace mock data with clean initial state
+            document.getElementById('findings-tbody').innerHTML =
+                '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">' +
+                '<div style="font-size:36px;margin-bottom:8px;">🛡️</div>' +
+                'Ready to scan. Enter a target IP and click Launch Scan.</td></tr>';
+            document.getElementById('terminal-body').innerHTML = '';
+            addLog('info', 'VulnForge v1.0.0 — Engine ready');
+            addLog('info', 'Enter a target IP address and select modules to begin scanning');
+        });
+
+        // Entrance animations
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -2252,7 +2481,6 @@
                 }
             });
         }, { threshold: 0.1 });
-
         document.querySelectorAll('.animate-in').forEach(el => {
             el.style.opacity = '0';
             el.style.transform = 'translateY(15px)';
