@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ╔══════════════════════════════════════════╗
-# ║  VulnForge — Installation Script        ║
+# ║  LinArmor — Installation Script        ║
 # ║  Linux Security Misconfiguration Scanner ║
 # ╚══════════════════════════════════════════╝
 
@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 
 echo -e "${CYAN}"
 echo "  ╔══════════════════════════════════════════╗"
-echo "  ║     🛡️  VulnForge Installer v1.0.0      ║"
+echo "  ║     🛡️  LinArmor Installer v1.0.0      ║"
 echo "  ║     Security Misconfiguration Framework  ║"
 echo "  ╚══════════════════════════════════════════╝"
 echo -e "${NC}"
@@ -92,13 +92,13 @@ echo -e "  ╠══════════════════════
 echo -e "  ║                                          ║"
 echo -e "  ║  Start Web UI:                           ║"
 echo -e "  ║    source venv/bin/activate               ║"
-echo -e "  ║    vulnforge --web                       ║"
+echo -e "  ║    linarmor --web                       ║"
 echo -e "  ║                                          ║"
 echo -e "  ║  CLI Scan:                               ║"
-echo -e "  ║    vulnforge scan -t 192.168.1.100       ║"
+echo -e "  ║    linarmor scan -t 192.168.1.100       ║"
 echo -e "  ║                                          ║"
 echo -e "  ║  Update CVE Database:                    ║"
-echo -e "  ║    vulnforge --update-db                 ║"
+echo -e "  ║    linarmor --update-db                 ║"
 echo -e "  ║                                          ║"
 echo -e "  ╚══════════════════════════════════════════╝${NC}"
 echo ""

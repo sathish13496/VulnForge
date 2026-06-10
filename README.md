@@ -1,4 +1,4 @@
-# 🛡️ VulnForge — Linux Security Misconfiguration Discovery Framework
+# 🛡️ LinArmor — Linux Security Misconfiguration Discovery Framework
 
 An offensive security framework that scans remote Linux servers for misconfigurations, maps findings to known CVEs, scores them with CVSS, and generates comprehensive security assessment reports.
 
@@ -17,8 +17,8 @@ An offensive security framework that scans remote Linux servers for misconfigura
 ### Option 1: Install Script (Recommended)
 
 ```bash
-git clone https://github.com/sathish13496/VulnForge.git
-cd VulnForge
+git clone https://github.com/sathish13496/LinArmor.git
+cd LinArmor
 chmod +x install.sh
 ./install.sh
 
@@ -26,15 +26,15 @@ chmod +x install.sh
 source venv/bin/activate
 
 # Start web UI
-vulnforge --web
+linarmor --web
 # Open http://localhost:5000
 ```
 
 ### Option 2: Docker
 
 ```bash
-docker build -t vulnforge .
-docker run -p 5000:5000 vulnforge
+docker build -t linarmor .
+docker run -p 5000:5000 linarmor
 # Open http://localhost:5000
 ```
 
@@ -42,7 +42,7 @@ docker run -p 5000:5000 vulnforge
 
 ```bash
 pip install -e .
-vulnforge --web
+linarmor --web
 ```
 
 ## Prerequisites
@@ -54,22 +54,22 @@ vulnforge --web
 
 ### Web UI
 ```bash
-vulnforge --web                       # Start web dashboard
-vulnforge --web --port 8080           # Custom port
+linarmor --web                       # Start web dashboard
+linarmor --web --port 8080           # Custom port
 ```
 
 ### CLI Scanning
 ```bash
-vulnforge scan -t 192.168.1.100                    # Full scan
-vulnforge scan -t 192.168.1.100 --type quick       # Quick scan
-vulnforge scan -t 10.0.0.5 -m ssh,kernel,services  # Custom modules
-vulnforge scan -t 10.0.0.5 -p 1-1000               # Custom port range
-vulnforge scan -t 10.0.0.5 --format html -o report.html
+linarmor scan -t 192.168.1.100                    # Full scan
+linarmor scan -t 192.168.1.100 --type quick       # Quick scan
+linarmor scan -t 10.0.0.5 -m ssh,kernel,services  # Custom modules
+linarmor scan -t 10.0.0.5 -p 1-1000               # Custom port range
+linarmor scan -t 10.0.0.5 --format html -o report.html
 ```
 
 ### CVE Database
 ```bash
-vulnforge --update-db                 # Download/update CVE database from NVD
+linarmor --update-db                 # Download/update CVE database from NVD
 ```
 
 ## Scan Modules
@@ -103,8 +103,8 @@ vulnforge --update-db                 # Download/update CVE database from NVD
 ## Project Structure
 
 ```
-vulnforge/
-├── vulnforge/
+linarmor/
+├── linarmor/
 │   ├── app.py          # Flask web server
 │   ├── cli.py          # CLI interface
 │   ├── config.py       # Configuration

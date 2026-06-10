@@ -31,4 +31,4 @@ HEALTHCHECK --interval=30s --timeout=5s \
     CMD python -c "import requests; requests.get('http://localhost:5000/api/scan/status')" || exit 1
 
 # Run the web server
-CMD ["vulnforge", "--web", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["linarmor", "--web", "--host", "0.0.0.0", "--port", "5000"]

@@ -1,4 +1,4 @@
-# VulnForge - Python Dependencies
+# LinArmor - Python Dependencies
 # Core web framework
 flask>=3.0
 flask-socketio>=5.3
