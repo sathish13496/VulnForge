@@ -1,0 +1,31 @@
+# VulnForge - Python Dependencies
+# Core web framework
+flask>=3.0
+flask-socketio>=5.3
+gevent>=24.2
+gevent-websocket>=0.10
+
+# Scanning
+python-nmap>=0.7.1
+paramiko>=3.4
+
+# HTTP & networking
+requests>=2.31
+
+# Reporting
+reportlab>=4.0
+jinja2>=3.1
+weasyprint>=62.0
+
+# CVE database
+sqlite-utils>=3.35
+
+# Configuration & rules
+pyyaml>=6.0
+
+# CLI
+click>=8.1
+rich>=13.0
+
+# Utilities
+python-dateutil>=2.8
