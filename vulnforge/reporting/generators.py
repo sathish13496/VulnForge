@@ -112,6 +112,15 @@ class HTMLReporter:
                 <td><code>{f.cve_id or '—'}</code></td>
                 <td><strong>{f.cvss_score}</strong></td>
                 <td>{f.status.value}</td>
+            </tr>
+            <tr>
+                <td colspan="6" style="padding:8px 16px 16px;border-top:none;">
+                    <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:14px;">
+                        <p style="margin-bottom:6px;"><strong style="color:#94a3b8;">Description:</strong> {f.description or 'N/A'}</p>
+                        {'<p style="margin-bottom:6px;"><strong style="color:#94a3b8;">Evidence:</strong> <code>' + f.evidence + '</code></p>' if f.evidence else ''}
+                        {'<p><strong style="color:#06d6a0;">Remediation:</strong> ' + f.remediation + '</p>' if f.remediation else ''}
+                    </div>
+                </td>
             </tr>"""
 
         counts = target.severity_counts
@@ -166,9 +175,9 @@ class HTMLReporter:
 
         <h2>Open Ports ({len(target.open_ports)})</h2>
         <table>
-            <thead><tr><th>Port</th><th>Service</th><th>Product</th><th>Version</th></tr></thead>
+            <thead><tr><th>Port</th><th>Protocol</th><th>Service</th><th>Product / Version</th><th>State</th></tr></thead>
             <tbody>
-                {''.join(f'<tr><td>{s.port}</td><td>{s.service_name}</td><td>{s.product}</td><td>{s.version}</td></tr>' for s in target.services)}
+                {''.join(f'<tr><td>{s.port}</td><td>{s.protocol.upper()}</td><td>{s.service_name}</td><td>{s.product} {s.version}</td><td>{s.state}</td></tr>' for s in target.services)}
             </tbody>
         </table>
 

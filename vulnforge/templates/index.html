@@ -1186,6 +1186,8 @@
             font-weight: 600;
             background: rgba(124, 58, 237, 0.1);
             color: var(--accent-secondary);
+            white-space: nowrap;
+            display: inline-block;
         }
 
         .expand-btn {
@@ -1921,8 +1923,34 @@
                     </div>
                 </div>
                 <div class="scan-actions">
-                    <button class="btn btn-secondary" onclick="pauseScan()">⏸️ Pause</button>
+                    <button class="btn btn-secondary" id="btn-pause" onclick="pauseScan()">⏸️ Pause</button>
+                    <button class="btn btn-secondary" id="btn-resume" onclick="resumeScan()" style="display:none">▶️ Resume</button>
                     <button class="btn btn-danger" onclick="stopScan()">⏹️ Stop</button>
+                    <button class="btn btn-ghost" onclick="newScan()" title="Clear results and start new scan">🔄 New Scan</button>
+                </div>
+            </section>
+
+            <!-- Open Ports -->
+            <section class="results-section animate-in" id="section-ports" style="display:none;">
+                <div class="results-header">
+                    <h2>🔌 Discovered Open Ports</h2>
+                    <span style="color:var(--text-muted);font-size:13px;" id="ports-count">0 ports</span>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="findings-table" id="ports-table">
+                        <thead>
+                            <tr>
+                                <th>Port</th>
+                                <th>Protocol</th>
+                                <th>Service</th>
+                                <th>Product / Version</th>
+                                <th>State</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ports-tbody">
+                            <tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">No port data. Run a scan first.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
@@ -1930,7 +1958,7 @@
             <section class="results-section animate-in" id="section-findings">
                 <div class="results-header">
                     <h2>Findings Overview</h2>
-                    <button class="btn btn-secondary">
+                    <button class="btn btn-secondary" onclick="exportResults()">
                         📥 Export Results
                     </button>
                 </div>
@@ -2163,7 +2191,7 @@
                         <div class="report-option-icon">📄</div>
                         <h3>PDF Report</h3>
                         <p>Full report with charts & graphs. Ideal for stakeholder presentations.</p>
-                        <button class="btn btn-primary" style="margin-top: 12px; width: 100%;">⬇️ Download PDF</button>
+                        <button class="btn btn-secondary" style="margin-top: 12px; width: 100%;">⬇️ Download PDF</button>
                     </div>
                     <div class="report-option" onclick="downloadReport('html')">
                         <div class="report-option-icon">🌐</div>
@@ -2177,6 +2205,41 @@
                         <p>Machine-readable format for integration with SIEM and ticketing systems.</p>
                         <button class="btn btn-secondary" style="margin-top: 12px; width: 100%;">⬇️ Download JSON</button>
                     </div>
+                </div>
+            </section>
+
+            <!-- Timeline -->
+            <section class="results-section animate-in" id="section-timeline">
+                <div class="results-header">
+                    <h2>📅 Scan Timeline</h2>
+                </div>
+                <div id="timeline-content" style="padding: 12px 0;">
+                    <div style="text-align:center;padding:40px;color:var(--text-muted);">
+                        <div style="font-size:36px;margin-bottom:8px;">📅</div>
+                        No scan history yet. Complete a scan to see the timeline.
+                    </div>
+                </div>
+            </section>
+
+            <!-- Audit Logs -->
+            <section class="results-section animate-in" id="section-audit">
+                <div class="results-header">
+                    <h2>📋 Audit Logs</h2>
+                    <button class="btn btn-ghost" onclick="clearAuditLogs()" style="font-size:12px;">Clear</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="findings-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Level</th>
+                                <th>Event</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-tbody">
+                            <tr><td colspan="3" style="text-align:center;padding:20px;color:var(--text-muted);">No audit events recorded yet.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
         </main>
@@ -2276,17 +2339,16 @@
             const el = document.getElementById('nav-' + view);
             if (el) el.classList.add('active');
 
-            // Map nav items to section IDs
             const sectionMap = {
                 dashboard: 'section-scan',
                 scan: 'section-scan',
                 findings: 'section-findings',
                 reports: 'section-reports',
                 cve: 'section-findings',
-                timeline: 'section-logs',
-                assets: 'section-scan',
+                timeline: 'section-timeline',
+                assets: 'section-ports',
                 settings: null,
-                logs: 'section-logs'
+                logs: 'section-audit'
             };
 
             const sectionId = sectionMap[view];
@@ -2451,6 +2513,8 @@
                         scanRunning = false;
                         document.getElementById('scan-overlay').classList.remove('active');
                         fetchFindings();
+                        fetchOpenPorts();
+                        updateTimeline(data);
                         pushNotif(data.status === 'completed' ? 'success' : 'warn',
                                   'Scan ' + data.status + ' — ' + (data.findings_count || 0) + ' findings');
                     }
@@ -2494,12 +2558,17 @@
             updatePipeline(d.phase_index || 0, d.status);
             if (d.phase_results) updatePhaseResults(d.phase_results);
 
+            // Update pause/resume buttons
+            document.getElementById('btn-pause').style.display = (d.status === 'paused') ? 'none' : '';
+            document.getElementById('btn-resume').style.display = (d.status === 'paused') ? '' : 'none';
+
             // Handle completion
             if (d.status === 'completed') {
                 scanRunning = false;
                 document.getElementById('scan-overlay').classList.remove('active');
                 if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
                 fetchFindings();
+                fetchOpenPorts();
             }
         }
 
@@ -2582,8 +2651,12 @@
             findings.sort((a, b) => (b.cvss_score || 0) - (a.cvss_score || 0));
             tbody.innerHTML = findings.map(f => {
                 const sev = f.severity || 'info';
-                const icon = (sev === 'critical' || sev === 'high') ? '🔴 Open'
-                           : sev === 'medium' ? '🟡 Review' : '🟢 Noted';
+                const st = f.status || 'open';
+                const statusMap = {
+                    open: '🔴 Open', review: '🟡 Review', noted: '🟢 Noted',
+                    resolved: '✅ Resolved', false_positive: '⚪ False Positive'
+                };
+                const icon = statusMap[st] || '🔴 Open';
                 const modName = MODULE_NAMES[f.module] || f.module || '—';
                 return '<tr>' +
                     '<td><button class="expand-btn" onclick="toggleDetail(this)">▶</button></td>' +
@@ -2632,6 +2705,8 @@
                 '<span class="log-message">' + esc(msg) + '</span>';
             t.appendChild(el);
             t.scrollTop = t.scrollHeight;
+            // Also add to audit logs
+            if (typeof addAuditLog === 'function') addAuditLog(level, msg);
         }
 
         function clearTerminal() {
@@ -2726,6 +2801,155 @@
             if (sm) sm.textContent = document.querySelectorAll('.module-checkbox:checked').length;
         }
 
+        // ── Resume Scan ──
+        async function resumeScan() {
+            try {
+                await fetch('/api/scan/resume', { method: 'POST' });
+                addLog('info', 'Scan resumed');
+                pushNotif('info', 'Scan resumed');
+                document.getElementById('btn-pause').style.display = '';
+                document.getElementById('btn-resume').style.display = 'none';
+            } catch (e) { addLog('error', 'Failed to resume scan'); }
+        }
+
+        // ── New Scan ──
+        function newScan() {
+            if (scanRunning && !confirm('A scan is running. Stop it and clear results?')) return;
+            if (scanRunning) {
+                fetch('/api/scan/stop', { method: 'POST' }).catch(() => {});
+                if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+            }
+            scanRunning = false;
+            document.getElementById('scan-overlay').classList.remove('active');
+            document.getElementById('target-ip').value = '';
+            clearTerminal();
+            resetPipeline();
+            resetPhaseResults();
+            resetStats();
+            document.getElementById('findings-tbody').innerHTML =
+                '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">' +
+                '<div style="font-size:36px;margin-bottom:8px;">🛡️</div>' +
+                'Ready to scan. Enter a target IP and click Launch Scan.</td></tr>';
+            document.getElementById('ports-tbody').innerHTML =
+                '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted);">No port data. Run a scan first.</td></tr>';
+            document.getElementById('section-ports').style.display = 'none';
+            addLog('info', 'Scan cleared — ready for new target');
+            pushNotif('info', 'Scan results cleared');
+            document.getElementById('section-scan').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // ── Export Results ──
+        function exportResults() {
+            const tbody = document.getElementById('findings-tbody');
+            if (!tbody || tbody.querySelector('td[colspan]')) {
+                alert('No findings to export. Run a scan first.');
+                return;
+            }
+            // Download findings as JSON from API
+            addLog('info', 'Exporting findings as JSON...');
+            window.open('/api/findings', '_blank');
+            pushNotif('info', 'Findings exported as JSON');
+        }
+
+        // ── Open Ports ──
+        async function fetchOpenPorts() {
+            try {
+                const res = await fetch('/api/target');
+                if (!res.ok) return;
+                const data = await res.json();
+                const section = document.getElementById('section-ports');
+                const tbody = document.getElementById('ports-tbody');
+                const count = document.getElementById('ports-count');
+
+                if (data.services && data.services.length > 0) {
+                    section.style.display = '';
+                    count.textContent = data.services.length + ' ports';
+                    tbody.innerHTML = data.services.map(s =>
+                        '<tr>' +
+                        '<td><strong>' + s.port + '</strong></td>' +
+                        '<td>' + (s.protocol || 'tcp').toUpperCase() + '</td>' +
+                        '<td>' + esc(s.service_name || '—') + '</td>' +
+                        '<td>' + esc((s.product || '') + ' ' + (s.version || '')).trim() + '</td>' +
+                        '<td><span style="color:var(--accent-secondary);">' + (s.state || 'open') + '</span></td>' +
+                        '</tr>'
+                    ).join('');
+                } else {
+                    section.style.display = 'none';
+                }
+            } catch (e) { /* no scan data */ }
+        }
+
+        // ── Audit Logs ──
+        let auditLogs = [];
+
+        function addAuditLog(level, message) {
+            const now = new Date().toLocaleTimeString('en-US', { hour12: false });
+            auditLogs.unshift({ time: now, level, message });
+            if (auditLogs.length > 100) auditLogs.pop();
+            renderAuditLogs();
+        }
+
+        function renderAuditLogs() {
+            const tbody = document.getElementById('audit-tbody');
+            if (!tbody) return;
+            if (!auditLogs.length) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--text-muted);">No audit events recorded yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = auditLogs.slice(0, 50).map(a => {
+                const lvl = a.level === 'success' ? 'OK' : a.level.toUpperCase();
+                const color = a.level === 'error' ? 'var(--severity-critical)'
+                            : a.level === 'warn' ? 'var(--severity-medium)'
+                            : a.level === 'success' ? 'var(--severity-low)'
+                            : 'var(--accent-info)';
+                return '<tr>' +
+                    '<td style="font-family:monospace;font-size:12px;">' + a.time + '</td>' +
+                    '<td><span style="color:' + color + ';font-weight:600;font-size:12px;">' + lvl + '</span></td>' +
+                    '<td style="font-size:13px;">' + esc(a.message) + '</td></tr>';
+            }).join('');
+        }
+
+        function clearAuditLogs() {
+            auditLogs = [];
+            renderAuditLogs();
+        }
+
+        // ── Timeline ──
+        let scanHistory = [];
+
+        function updateTimeline(statusData) {
+            const now = new Date().toLocaleString();
+            const ip = document.getElementById('target-ip').value || statusData.target_ip || '?';
+            scanHistory.unshift({
+                time: now,
+                ip: ip,
+                status: statusData.status,
+                findings: statusData.findings_count || 0,
+                elapsed: statusData.elapsed_time || '--:--',
+                type: currentScanType
+            });
+            renderTimeline();
+        }
+
+        function renderTimeline() {
+            const el = document.getElementById('timeline-content');
+            if (!el || !scanHistory.length) return;
+            el.innerHTML = scanHistory.map(s => {
+                const color = s.status === 'completed' ? 'var(--accent-secondary)'
+                            : s.status === 'error' ? 'var(--severity-critical)' : 'var(--severity-medium)';
+                return '<div style="display:flex;align-items:center;gap:14px;padding:14px;border-bottom:1px solid var(--border-color);">' +
+                    '<div style="width:10px;height:10px;border-radius:50%;background:' + color + ';flex-shrink:0;"></div>' +
+                    '<div style="flex:1;">' +
+                    '<div style="color:var(--text-primary);font-weight:600;">' + esc(s.ip) + ' <span style="color:var(--text-muted);font-weight:400;font-size:12px;">' + cap(s.type) + ' Scan</span></div>' +
+                    '<div style="color:var(--text-muted);font-size:12px;">' + s.time + '</div>' +
+                    '</div>' +
+                    '<div style="text-align:right;">' +
+                    '<div style="color:' + color + ';font-weight:700;">' + cap(s.status) + '</div>' +
+                    '<div style="color:var(--text-muted);font-size:12px;">' + s.findings + ' findings · ' + s.elapsed + '</div>' +
+                    '</div></div>';
+            }).join('');
+        }
+
         // ── Filter Chips ──
         document.querySelectorAll('.filter-chip').forEach(chip => {
             chip.addEventListener('click', async () => {
@@ -2789,7 +3013,10 @@
 
     <!-- Notification Dropdown -->
     <div class="notification-dropdown" id="notif-dropdown">
-        <div class="notif-header">🔔 Notifications</div>
+        <div class="notif-header" style="display:flex;justify-content:space-between;align-items:center;">
+            🔔 Notifications
+            <button onclick="toggleNotifications()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;">✕</button>
+        </div>
         <div id="notif-list">
             <div class="notif-item level-info">
                 <div>VulnForge engine is ready</div>
