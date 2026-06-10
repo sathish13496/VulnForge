@@ -111,10 +111,9 @@ class HTMLReporter:
                 <td>{f.module}</td>
                 <td><code>{f.cve_id or '—'}</code></td>
                 <td><strong>{f.cvss_score}</strong></td>
-                <td>{f.status.value}</td>
             </tr>
             <tr>
-                <td colspan="6" style="padding:8px 16px 16px;border-top:none;">
+                <td colspan="5" style="padding:8px 16px 16px;border-top:none;">
                     <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:14px;">
                         <p style="margin-bottom:6px;"><strong style="color:#94a3b8;">Description:</strong> {f.description or 'N/A'}</p>
                         {'<p style="margin-bottom:6px;"><strong style="color:#94a3b8;">Evidence:</strong> <code>' + f.evidence + '</code></p>' if f.evidence else ''}
@@ -183,7 +182,7 @@ class HTMLReporter:
 
         <h2>Findings ({target.total_findings})</h2>
         <table>
-            <thead><tr><th>Severity</th><th>Finding</th><th>Module</th><th>CVE</th><th>CVSS</th><th>Status</th></tr></thead>
+            <thead><tr><th>Severity</th><th>Finding</th><th>Module</th><th>CVE</th><th>CVSS</th></tr></thead>
             <tbody>{findings_rows}</tbody>
         </table>
 

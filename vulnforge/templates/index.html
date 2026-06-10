@@ -1637,16 +1637,11 @@
                     <div class="nav-section-title">Analysis</div>
                     <div class="nav-item" id="nav-cve" onclick="showView('cve')">
                         <span class="nav-icon">🔗</span>
-                        <span>CVE Database</span>
+                        <span>CVE Analysis</span>
                     </div>
                     <div class="nav-item" id="nav-timeline" onclick="showView('timeline')">
                         <span class="nav-icon">📈</span>
                         <span>Timeline</span>
-                    </div>
-                    <div class="nav-item" id="nav-assets" onclick="showView('assets')">
-                        <span class="nav-icon">🖥️</span>
-                        <span>Assets</span>
-                    </div>
                 </div>
 
                 <div class="nav-section">
@@ -1922,7 +1917,7 @@
                         <div class="scan-stat-label">Issues Found</div>
                     </div>
                 </div>
-                <div class="scan-actions">
+                <div class="scan-actions" id="scan-actions" style="display:none;">
                     <button class="btn btn-secondary" id="btn-pause" onclick="pauseScan()">⏸️ Pause</button>
                     <button class="btn btn-secondary" id="btn-resume" onclick="resumeScan()" style="display:none">▶️ Resume</button>
                     <button class="btn btn-danger" onclick="stopScan()">⏹️ Stop</button>
@@ -1958,9 +1953,6 @@
             <section class="results-section animate-in" id="section-findings">
                 <div class="results-header">
                     <h2>Findings Overview</h2>
-                    <button class="btn btn-secondary" onclick="exportResults()">
-                        📥 Export Results
-                    </button>
                 </div>
 
                 <div class="stats-grid">
@@ -1999,7 +1991,7 @@
                     </div>
                     <div class="search-wrapper">
                         <span class="search-icon">🔍</span>
-                        <input type="text" class="search-input-small" placeholder="Search findings...">
+                        <input type="text" class="search-input-small" id="findings-search" placeholder="Search findings..." oninput="searchFindings(this.value)">
                     </div>
                 </div>
                 <table class="findings-table">
@@ -2011,7 +2003,6 @@
                             <th>Module</th>
                             <th>CVE</th>
                             <th>CVSS</th>
-                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody id="findings-tbody">
@@ -2191,25 +2182,25 @@
                         <div class="report-option-icon">📄</div>
                         <h3>PDF Report</h3>
                         <p>Full report with charts & graphs. Ideal for stakeholder presentations.</p>
-                        <button class="btn btn-secondary" style="margin-top: 12px; width: 100%;">⬇️ Download PDF</button>
+                        <button class="btn btn-primary" style="margin-top: 12px; width: 100%;">⬇️ Download PDF</button>
                     </div>
                     <div class="report-option" onclick="downloadReport('html')">
                         <div class="report-option-icon">🌐</div>
                         <h3>HTML Report</h3>
                         <p>Interactive web-based report with filtering and search capabilities.</p>
-                        <button class="btn btn-secondary" style="margin-top: 12px; width: 100%;">⬇️ Download HTML</button>
+                        <button class="btn btn-primary" style="margin-top: 12px; width: 100%;">⬇️ Download HTML</button>
                     </div>
                     <div class="report-option" onclick="downloadReport('json')">
                         <div class="report-option-icon">📊</div>
                         <h3>JSON Export</h3>
                         <p>Machine-readable format for integration with SIEM and ticketing systems.</p>
-                        <button class="btn btn-secondary" style="margin-top: 12px; width: 100%;">⬇️ Download JSON</button>
+                        <button class="btn btn-primary" style="margin-top: 12px; width: 100%;">⬇️ Download JSON</button>
                     </div>
                 </div>
             </section>
 
             <!-- Timeline -->
-            <section class="results-section animate-in" id="section-timeline">
+            <section class="results-section animate-in" id="section-timeline" style="display:none;">
                 <div class="results-header">
                     <h2>📅 Scan Timeline</h2>
                 </div>
@@ -2222,7 +2213,7 @@
             </section>
 
             <!-- Audit Logs -->
-            <section class="results-section animate-in" id="section-audit">
+            <section class="results-section animate-in" id="section-audit" style="display:none;">
                 <div class="results-header">
                     <h2>📋 Audit Logs</h2>
                     <button class="btn btn-ghost" onclick="clearAuditLogs()" style="font-size:12px;">Clear</button>
@@ -2334,21 +2325,42 @@
         }
 
         // ── Sidebar Navigation ──
+        const dedicatedViews = ['timeline', 'logs'];
         function showView(view) {
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
             const el = document.getElementById('nav-' + view);
             if (el) el.classList.add('active');
 
+            // Dedicated full-page views: hide dashboard, show only that section
+            const mainSections = document.querySelectorAll('.main-content > section, .main-content > .scan-control, .main-content > div:not(#scan-type-desc)');
+            const timelineSec = document.getElementById('section-timeline');
+            const auditSec = document.getElementById('section-audit');
+
+            if (dedicatedViews.includes(view)) {
+                // Hide all dashboard sections
+                mainSections.forEach(s => {
+                    if (s.id !== 'section-timeline' && s.id !== 'section-audit') s.style.display = 'none';
+                });
+                // Show only the target section
+                if (view === 'timeline') { timelineSec.style.display = ''; auditSec.style.display = 'none'; }
+                if (view === 'logs') { auditSec.style.display = ''; timelineSec.style.display = 'none'; }
+                return;
+            }
+
+            // Restore all dashboard sections
+            mainSections.forEach(s => {
+                if (s.id === 'section-timeline' || s.id === 'section-audit') s.style.display = 'none';
+                else if (s.id === 'section-ports' && !document.querySelector('#ports-tbody tr td strong')) s.style.display = 'none';
+                else s.style.display = '';
+            });
+
+            // Scroll to specific section
             const sectionMap = {
                 dashboard: 'section-scan',
                 scan: 'section-scan',
                 findings: 'section-findings',
                 reports: 'section-reports',
                 cve: 'section-findings',
-                timeline: 'section-timeline',
-                assets: 'section-ports',
-                settings: null,
-                logs: 'section-audit'
             };
 
             const sectionId = sectionMap[view];
@@ -2459,7 +2471,7 @@
             resetStats();
             resetPhaseResults();
             document.getElementById('findings-tbody').innerHTML =
-                '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">⏳ Scan in progress...</td></tr>';
+                '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">⏳ Scan in progress...</td></tr>';
             document.getElementById('scan-overlay').classList.add('active');
             // Reset overlay progress
             document.getElementById('progress-percent').textContent = '0%';
@@ -2467,6 +2479,7 @@
             document.getElementById('progress-phase').textContent = 'Initializing scan engine...';
             document.getElementById('progress-detail').textContent = 'Connecting to target ' + ip + '...';
             scanRunning = true;
+            document.getElementById('scan-actions').style.display = '';
 
             pushNotif('info', 'Scan started on ' + ip);
 
@@ -2511,6 +2524,7 @@
                         clearInterval(statusInterval);
                         statusInterval = null;
                         scanRunning = false;
+                document.getElementById('scan-actions').style.display = 'none';
                         document.getElementById('scan-overlay').classList.remove('active');
                         fetchFindings();
                         fetchOpenPorts();
@@ -2565,6 +2579,7 @@
             // Handle completion
             if (d.status === 'completed') {
                 scanRunning = false;
+                document.getElementById('scan-actions').style.display = 'none';
                 document.getElementById('scan-overlay').classList.remove('active');
                 if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
                 fetchFindings();
@@ -2641,22 +2656,19 @@
             } catch (e) { addLog('warn', 'Could not fetch findings'); }
         }
 
+        let allFindings = [];
+
         function renderFindings(findings) {
+            allFindings = findings;
             const tbody = document.getElementById('findings-tbody');
             if (!findings.length) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">' +
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">' +
                     '<div style="font-size:36px;margin-bottom:8px;">🔍</div>No findings discovered. Run a scan to begin.</td></tr>';
                 return;
             }
             findings.sort((a, b) => (b.cvss_score || 0) - (a.cvss_score || 0));
             tbody.innerHTML = findings.map(f => {
                 const sev = f.severity || 'info';
-                const st = f.status || 'open';
-                const statusMap = {
-                    open: '🔴 Open', review: '🟡 Review', noted: '🟢 Noted',
-                    resolved: '✅ Resolved', false_positive: '⚪ False Positive'
-                };
-                const icon = statusMap[st] || '🔴 Open';
                 const modName = MODULE_NAMES[f.module] || f.module || '—';
                 return '<tr>' +
                     '<td><button class="expand-btn" onclick="toggleDetail(this)">▶</button></td>' +
@@ -2665,8 +2677,8 @@
                     '<td><span class="finding-module-tag">' + esc(modName) + '</span></td>' +
                     '<td><span class="cve-tag">' + (f.cve_id || '—') + '</span></td>' +
                     '<td><span class="cvss-score cvss-' + sev + '">' + (f.cvss_score != null ? f.cvss_score : '—') + '</span></td>' +
-                    '<td>' + icon + '</td></tr>' +
-                    '<tr class="finding-detail-row" style="display:none"><td colspan="7">' +
+                    '</tr>' +
+                    '<tr class="finding-detail-row" style="display:none"><td colspan="6">' +
                     '<div style="padding:16px;background:var(--bg-input);border-radius:8px;margin:4px 0;">' +
                     '<p style="margin-bottom:8px;color:var(--text-primary);"><strong>Description:</strong> ' + esc(f.description || '') + '</p>' +
                     (f.evidence ? '<p style="margin-bottom:8px;color:var(--text-secondary);"><strong>Evidence:</strong> <code>' + esc(f.evidence) + '</code></p>' : '') +
@@ -2730,6 +2742,7 @@
             try {
                 await fetch('/api/scan/stop', { method: 'POST' });
                 scanRunning = false;
+                document.getElementById('scan-actions').style.display = 'none';
                 document.getElementById('scan-overlay').classList.remove('active');
                 if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
                 addLog('warn', 'Scan stopped by user');
@@ -2801,6 +2814,24 @@
             if (sm) sm.textContent = document.querySelectorAll('.module-checkbox:checked').length;
         }
 
+        // ── Search Findings ──
+        function searchFindings(query) {
+            if (!query || !query.trim()) {
+                renderFindings(allFindings);
+                return;
+            }
+            const q = query.toLowerCase();
+            const filtered = allFindings.filter(f =>
+                (f.title || '').toLowerCase().includes(q) ||
+                (f.module || '').toLowerCase().includes(q) ||
+                (MODULE_NAMES[f.module] || '').toLowerCase().includes(q) ||
+                (f.cve_id || '').toLowerCase().includes(q) ||
+                (f.severity || '').toLowerCase().includes(q) ||
+                (f.description || '').toLowerCase().includes(q)
+            );
+            renderFindings(filtered);
+        }
+
         // ── Resume Scan ──
         async function resumeScan() {
             try {
@@ -2820,6 +2851,7 @@
                 if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
             }
             scanRunning = false;
+                document.getElementById('scan-actions').style.display = 'none';
             document.getElementById('scan-overlay').classList.remove('active');
             document.getElementById('target-ip').value = '';
             clearTerminal();
@@ -2827,7 +2859,7 @@
             resetPhaseResults();
             resetStats();
             document.getElementById('findings-tbody').innerHTML =
-                '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">' +
+                '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">' +
                 '<div style="font-size:36px;margin-bottom:8px;">🛡️</div>' +
                 'Ready to scan. Enter a target IP and click Launch Scan.</td></tr>';
             document.getElementById('ports-tbody').innerHTML =
@@ -2986,7 +3018,7 @@
 
             // Replace mock data with clean initial state
             document.getElementById('findings-tbody').innerHTML =
-                '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">' +
+                '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">' +
                 '<div style="font-size:36px;margin-bottom:8px;">🛡️</div>' +
                 'Ready to scan. Enter a target IP and click Launch Scan.</td></tr>';
             document.getElementById('terminal-body').innerHTML = '';
