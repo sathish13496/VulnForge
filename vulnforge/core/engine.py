@@ -345,7 +345,60 @@ class ScanEngine:
             "modules_active": len(self._target.modules_selected),
             "findings_count": self._target.total_findings,
             "severity_counts": self._target.severity_counts,
+            "phase_results": self._get_phase_results(),
         }
+
+    def _get_phase_results(self) -> list:
+        """Generate human-readable result labels for each pipeline phase."""
+        if not self._target:
+            return ["—"] * 6
+
+        t = self._target
+        results = ["—"] * 6
+
+        # Phase 0: Reconnaissance
+        if self._current_phase > 0 or self._target.scan_status.value == "completed":
+            if t.is_alive:
+                results[0] = f"Host: UP ({t.os_family or 'Unknown OS'})"
+            else:
+                results[0] = "Host: DOWN"
+        elif self._current_phase == 0 and self._progress > 0:
+            results[0] = "Scanning..."
+
+        # Phase 1: Enumeration
+        if self._current_phase > 1 or self._target.scan_status.value == "completed":
+            results[1] = f"{len(t.open_ports)} ports · {len(t.services)} services"
+        elif self._current_phase == 1:
+            results[1] = "Scanning..."
+
+        # Phase 2: Vulnerability Discovery
+        if self._current_phase > 2 or self._target.scan_status.value == "completed":
+            results[2] = f"{t.total_findings} findings"
+        elif self._current_phase == 2:
+            results[2] = f"{t.total_findings} found..."
+
+        # Phase 3: Exploitation
+        if self._current_phase > 3 or self._target.scan_status.value == "completed":
+            crit = t.severity_counts.get("critical", 0)
+            high = t.severity_counts.get("high", 0)
+            results[3] = f"{crit + high} exploitable"
+        elif self._current_phase == 3:
+            results[3] = "Validating..."
+
+        # Phase 4: Post-Exploitation
+        if self._current_phase > 4 or self._target.scan_status.value == "completed":
+            results[4] = "Assessment done"
+        elif self._current_phase == 4:
+            results[4] = "Assessing..."
+
+        # Phase 5: Reporting
+        if self._target.scan_status.value == "completed":
+            results[5] = "Report ready"
+        elif self._current_phase == 5:
+            results[5] = "Compiling..."
+
+        return results
+
 
     def get_target(self) -> Optional[Target]:
         """Get the current target with all findings."""

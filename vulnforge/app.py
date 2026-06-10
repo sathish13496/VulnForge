@@ -287,8 +287,10 @@ def generate_report(report_format):
         return send_file(str(path), as_attachment=True, download_name=path.name)
 
     elif report_format == "pdf":
-        # PDF generation requires additional setup
-        return jsonify({"error": "PDF generation not yet implemented. Use HTML or JSON."}), 501
+        # Serve HTML report inline for browser print-to-PDF
+        reporter = HTMLReporter()
+        path = reporter.generate(target)
+        return send_file(str(path), mimetype="text/html", download_name=path.name)
 
     return jsonify({"error": f"Unknown format: {report_format}"}), 400
 
