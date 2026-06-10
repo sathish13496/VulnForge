@@ -90,6 +90,13 @@ class ScanEngine:
     # Configuration
     # ──────────────────────────────────────────────
 
+    def _reset_state(self) -> None:
+        """Reset internal engine state for a fresh scan."""
+        self._stop_event.clear()
+        self._pause_event.set()  # Not paused
+        self._current_phase = 0
+        self._progress = 0.0
+
     def configure(
         self,
         ip: str,
@@ -106,6 +113,9 @@ class ScanEngine:
             port_range: Custom port range (e.g., "1-1000"). Uses scan_type default if None.
             modules: List of module names to run. Uses scan_type default if None.
         """
+        # Reset engine state for a fresh scan
+        self._reset_state()
+
         scan_config = SCAN_TYPES.get(scan_type, SCAN_TYPES["full"])
 
         self._target = Target(
@@ -137,6 +147,19 @@ class ScanEngine:
             self._emit("error", "No target configured. Call configure() first.")
             return
 
+        # Check if a scan thread is truly still active
+        if self._scan_thread and self._scan_thread.is_alive():
+            # If the scan is in a terminal state but thread hasn't exited yet,
+            # wait briefly for it to finish
+            if self._target.scan_status in (
+                ScanStatus.STOPPED, ScanStatus.COMPLETED, ScanStatus.ERROR
+            ):
+                self._scan_thread.join(timeout=3)
+            else:
+                self._emit("warn", "Scan is already running")
+                return
+
+        # Final check after potential join
         if self._scan_thread and self._scan_thread.is_alive():
             self._emit("warn", "Scan is already running")
             return
@@ -167,7 +190,7 @@ class ScanEngine:
             self._emit_status()
 
     def stop(self) -> None:
-        """Stop the scan."""
+        """Stop the scan and wait for the thread to terminate."""
         self._stop_event.set()
         self._pause_event.set()  # Unblock if paused
         if self._target:
@@ -175,6 +198,11 @@ class ScanEngine:
             self._target.end_time = datetime.now()
             self._emit("warn", "Scan stopped by user")
             self._emit_status()
+
+        # Wait for the scan thread to actually finish
+        if self._scan_thread and self._scan_thread.is_alive():
+            self._scan_thread.join(timeout=5)
+        self._scan_thread = None
 
     @property
     def is_running(self) -> bool:
@@ -257,6 +285,9 @@ class ScanEngine:
                 self._target.scan_status = ScanStatus.ERROR
                 self._target.end_time = datetime.now()
                 self._emit_status()
+        finally:
+            # Always clear the thread reference so start() won't see a stale thread
+            self._scan_thread = None
 
     def _run_modules(self) -> None:
         """Run all selected scan modules against the target."""

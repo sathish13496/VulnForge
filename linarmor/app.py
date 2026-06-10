@@ -8,6 +8,7 @@ Uses WebSocket (via Flask-SocketIO) for real-time scan log streaming.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -152,6 +153,12 @@ def start_scan():
     if not target_ip:
         return jsonify({"error": "target_ip is required"}), 400
 
+    # Validate IP address format
+    try:
+        ipaddress.ip_address(target_ip)
+    except ValueError:
+        return jsonify({"error": f"Invalid IP address format: '{target_ip}'. Please enter a valid IPv4 or IPv6 address."}), 400
+
     scan_type = data.get("scan_type", "full")
     port_range = data.get("port_range")
     modules = data.get("modules")
@@ -197,7 +204,7 @@ def resume_scan():
 
 @app.route("/api/scan/stop", methods=["POST"])
 def stop_scan():
-    """Stop the running scan."""
+    """Stop the running scan and wait for clean shutdown."""
     engine.stop()
     return jsonify({"status": "stopped"})
 
