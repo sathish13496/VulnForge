@@ -2334,15 +2334,17 @@
             // Dedicated full-page views: hide dashboard, show only that section
             const mainSections = document.querySelectorAll('.main-content > section, .main-content > .scan-control');
             const scanTypeDesc = document.getElementById('scan-type-desc');
+            const topBar = document.querySelector('.top-bar');
             const timelineSec = document.getElementById('section-timeline');
             const auditSec = document.getElementById('section-audit');
 
             if (dedicatedViews.includes(view)) {
-                // Hide all dashboard sections + scan type banner
+                // Hide all dashboard sections + top bar + scan type banner
                 mainSections.forEach(s => {
                     if (s.id !== 'section-timeline' && s.id !== 'section-audit') s.style.display = 'none';
                 });
                 if (scanTypeDesc) scanTypeDesc.style.display = 'none';
+                if (topBar) topBar.style.display = 'none';
                 // Show only the target section
                 if (view === 'timeline') { timelineSec.style.display = ''; auditSec.style.display = 'none'; }
                 if (view === 'logs') { auditSec.style.display = ''; timelineSec.style.display = 'none'; }
@@ -2356,6 +2358,7 @@
                 else s.style.display = '';
             });
             if (scanTypeDesc) scanTypeDesc.style.display = '';
+            if (topBar) topBar.style.display = '';
 
             // Scroll to specific section
             const sectionMap = {
